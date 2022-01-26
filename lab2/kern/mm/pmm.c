@@ -189,7 +189,7 @@ nr_free_pages(void) {
 static void
 page_init(void) {
     struct e820map *memmap = (struct e820map *)(0x8000 + KERNBASE);
-    uint64_t maxpa = 0;
+    uint64_t maxpa = 0;  // 最大物理内存地址
 
     cprintf("e820map:\n");
     int i;

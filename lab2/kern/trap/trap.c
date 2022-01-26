@@ -46,6 +46,16 @@ idt_init(void) {
       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
+    extern uintptr_t __vectors[];
+    int i;
+    for (i = 0; i < 256; ++i) {
+        SETGATE(idt[i], 0, KERNEL_CS, __vectors[i], DPL_KERNEL);
+    }
+    // 应用程序发出系统调用请求
+    SETGATE(idt[T_SYSCALL], 1, KERNEL_CS, __vectors[T_SYSCALL], DPL_USER);
+    // 从用户态转到内核态
+    SETGATE(idt[T_SWITCH_TOK], 1, KERNEL_CS, __vectors[T_SWITCH_TOK], DPL_USER);
+    lidt(&idt_pd);
 }
 
 static const char *
@@ -134,6 +144,44 @@ print_regs(struct pushregs *regs) {
     cprintf("  eax  0x%08x\n", regs->reg_eax);
 }
 
+/* temporary trapframe or pointer to trapframe */
+struct trapframe switchk2u, *switchu2k;
+static void
+switch_to_user(struct trapframe *tf) {
+    if (tf->tf_cs != USER_CS) {
+        switchk2u = *tf;
+        switchk2u.tf_cs = USER_CS;
+        switchk2u.tf_ds = switchk2u.tf_es = switchk2u.tf_ss = USER_DS;
+        switchk2u.tf_eflags = (switchk2u.tf_eflags & ~FL_IOPL_MASK) | FL_IOPL_3;
+        // 中断在内核态产生， 也就是在内核态进入内核态，特权级没有改变
+        // 因此处理器没有压入ss和esp， 需要预留出这两个寄存器的空间来处理离开内核态时要多弹两个的情况
+        // esp设置为 lab1_switch_to_user 的return address
+        // 此esp为离开中断用
+        switchk2u.tf_esp = (uint32_t)tf + sizeof(struct trapframe) - 2 * sizeof(uintptr_t);
+        // trapentry.S 中执行完call trap后会弹出esp，因此要修改esp
+        // 此esp为回到__alltraps用
+        *((uint32_t *)tf - 1) = (uint32_t)&switchk2u;
+//        print_trapframe(&switchk2u);
+    }
+}
+
+static void
+switch_to_kernel(struct trapframe *tf) {
+    if (tf->tf_cs != KERNEL_CS) {
+        tf->tf_cs = KERNEL_CS;
+        tf->tf_ds = tf->tf_es = tf->tf_ss = KERNEL_DS;
+        tf->tf_eflags = (tf->tf_eflags & ~FL_IOPL_MASK) | FL_IOPL_0;
+        // 此时存的esp是内核调用栈的地址
+        // 跨特权时压栈的esp和ss不需要，因此去掉它们两个
+        switchu2k = (struct trapframe *)(tf->tf_esp - (sizeof(struct trapframe) - 2 * sizeof(uintptr_t)));
+        // 将用户调用栈的内容复制到内核调用栈中，否则就会造成内核态访问用户态内存
+        memmove(switchu2k, tf, sizeof(struct trapframe) - 8);
+        // trapentry.S 中执行完call trap后会弹出esp，因此要修改esp
+        // 此esp为回到__alltraps用
+        *((uint32_t *)tf - 1) = (uint32_t)switchu2k;
+    }
+}
+
 /* trap_dispatch - dispatch based on what type of trap occurred */
 static void
 trap_dispatch(struct trapframe *tf) {
@@ -147,6 +195,10 @@ trap_dispatch(struct trapframe *tf) {
          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
          * (3) Too Simple? Yes, I think so!
          */
+        ++ticks;
+        if (ticks % TICK_NUM == 0) {
+            print_ticks();
+        }
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();
@@ -158,8 +210,10 @@ trap_dispatch(struct trapframe *tf) {
         break;
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
     case T_SWITCH_TOU:
+        switch_to_user(tf);
+        break;
     case T_SWITCH_TOK:
-        panic("T_SWITCH_** ??\n");
+        switch_to_kernel(tf);
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:
