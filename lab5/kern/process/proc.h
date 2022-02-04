@@ -57,6 +57,7 @@ struct proc_struct {
     int exit_code;                              // exit code (be sent to parent proc)
     uint32_t wait_state;                        // waiting state
     struct proc_struct *cptr, *yptr, *optr;     // relations between processes
+                                                // cptr 子进程列表
 };
 
 #define PF_EXITING                  0x00000001      // getting shutdown
