@@ -178,6 +178,8 @@ proc_run(struct proc_struct *proc) {
         local_intr_save(intr_flag);
         {
             current = proc;
+            // 两个不同线程在进入内核态时，他们所用的栈空间可能是要改变的
+            // 因此要修改任务状态段的esp，使进入内核态时esp到正确的栈空间
             load_esp0(next->kstack + KSTACKSIZE);
             lcr3(next->cr3);
             switch_to(&(prev->context), &(next->context));
@@ -318,6 +320,7 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     // 其实initproc还没有执行过，所以这其实就是initproc实际执行的第一条指令地址和堆栈指针。
     copy_thread(proc, stack, tf);
     //    5. insert proc_struct into hash_list && proc_list
+    // 要确保是原子操作
     bool intr_flag;
     local_intr_save(intr_flag);
     {
