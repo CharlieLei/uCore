@@ -94,11 +94,24 @@ lab1_print_cur_status(void) {
 static void
 lab1_switch_to_user(void) {
     //LAB1 CHALLENGE 1 : TODO
+    // 中断在内核态产生， 也就是在内核态进入内核态，特权级没有改变
+    // 因此处理器没有压入ss和esp， 需要预留出这两个寄存器的压栈空间
+    asm volatile (
+    "sub $0x8, %%esp \n"
+    "int %0 \n"
+    "mov %%ebp, %%esp"
+    :
+    : "i"(T_SWITCH_TOU));
 }
 
 static void
 lab1_switch_to_kernel(void) {
     //LAB1 CHALLENGE 1 :  TODO
+    asm volatile (
+    "int %0 \n"
+    "mov %%ebp, %%esp"
+    :
+    : "i"(T_SWITCH_TOK));
 }
 
 static void
