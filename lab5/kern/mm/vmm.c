@@ -200,8 +200,10 @@ dup_mmap(struct mm_struct *to, struct mm_struct *from) {
         }
 
         insert_vma_struct(to, nvma);
-
-        bool share = 0;
+        // 实现Copy on Write
+        // 当一个用户父进程创建自己的子进程时，父进程会把其申请的用户空间设置为只读，子进程可共享父进程占用的用户内存空间中的页面
+        // 启用共享
+        bool share = 1;
         if (copy_range(to->pgdir, from->pgdir, vma->vm_start, vma->vm_end, share) != 0) {
             return -E_NO_MEM;
         }
@@ -480,21 +482,6 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     *    page_insert ： build the map of phy addr of an Page with the linear addr la
     *    swap_map_swappable ： set the page swappable
     */
-        if(swap_init_ok) {
-            struct Page *page=NULL;
-            //(1）According to the mm AND addr, try to load the content of right disk page
-            //    into the memory which page managed.
-            swap_in(mm, addr, &page);
-            //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
-            page_insert(mm->pgdir, page, addr, perm);
-            page->pra_vaddr = addr;
-            //(3) make the page swappable.
-            swap_map_swappable(mm, addr, page, 1);
-        }
-        else {
-            cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
-            goto failed;
-        }
     /*
      * LAB5 CHALLENGE ( the implmentation Copy on Write)
 		There are 2 situlations when code comes here.
@@ -504,6 +491,48 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
 		  2) *ptep & PTE_P == 0 & but *ptep!=0, it means this pte is a  swap entry.
 		     We should add the LAB3's results here.
      */
+        if (*ptep & PTE_P) {
+            if (vma->vm_flags & VM_WRITE) {
+                // vma表示该页是可写的，说明是因为向只读页写而导致的缺页中断
+                struct Page *p = pte2page(*ptep);
+                assert(p != NULL && p->ref > 0);
+                if (p->ref > 1) {
+                    // 有多个进程使用这个页，需要复制到新的页
+                    struct Page *npage = alloc_page();
+                    assert(npage != NULL);
+                    void *src_kvaddr = page2kva(p);
+                    void *dst_kvaddr = page2kva(npage);
+                    memcpy(dst_kvaddr, src_kvaddr, PGSIZE);
+                    ret = page_insert(mm->pgdir, npage, addr, ((*ptep) & PTE_USER) | PTE_W);
+                    assert(ret == 0);
+                    cprintf("Handled one Copy-On-Write fault at 0x%08x: copied\n", addr);
+                } else {
+                    // 只有一个进程写这个页，重用即可，不需要复制到新的页
+                    ret = page_insert(mm->pgdir, p, addr, ((*ptep) & PTE_USER) | PTE_W);
+                    assert(ret == 0);
+                    cprintf("Handled one Copy-On-Write fault: reused\n");
+                }
+            } else {
+                cprintf("Not a Copy-On-Write read-only fault\n");
+                goto failed;
+            }
+        } else {
+            if(swap_init_ok) {
+                struct Page *page=NULL;
+                //(1）According to the mm AND addr, try to load the content of right disk page
+                //    into the memory which page managed.
+                swap_in(mm, addr, &page);
+                //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
+                page_insert(mm->pgdir, page, addr, perm);
+                page->pra_vaddr = addr;
+                //(3) make the page swappable.
+                swap_map_swappable(mm, addr, page, 1);
+            }
+            else {
+                cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
+                goto failed;
+            }
+        }
    }
    ret = 0;
 failed:
