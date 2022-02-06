@@ -847,6 +847,7 @@ init_main(void *arg) {
     size_t kernel_allocated_store = kallocated();
 
     int pid = kernel_thread(user_main, NULL, 0);
+    cprintf("user_main's pid: %d\n", pid);
     if (pid <= 0) {
         panic("create user_main failed.\n");
     }

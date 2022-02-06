@@ -8,7 +8,9 @@
 
 /* You should define the BigStride constant here*/
 /* LAB6: YOUR CODE */
-#define BIG_STRIDE  0x7FFFFFFF  /* you should give a value, and is ??? */
+// 由于 max_stride - min_stride <= PASS_MAX <= BIG_STRIDE，并且需要保证两个进程 stride
+// 差值在32位有符号整数表示范围内，所以 max_stride - min_stride <= 0x7fffffff
+#define BIG_STRIDE  0x7FFFFFFF
 
 /* The compare function for two skew_heap_node_t's and the
  * corresponding procs*/
@@ -119,11 +121,13 @@ stride_pick_next(struct run_queue *rq) {
       * (2) update p;s stride value: p->lab6_stride
       * (3) return p
       */
-     // ?????
+     // initproc(pid=1)和执行user_main的进程(pid=2)都会进入，它们的优先级为0
     if (rq->lab6_run_pool == NULL) return NULL;
     struct proc_struct* min_proc = le2proc(rq->lab6_run_pool, lab6_run_pool);
+    cprintf("pid %d, name %s, priority %d, stride 0x%08x\n", min_proc->pid, min_proc->name,
+            min_proc->lab6_priority, min_proc->lab6_stride);
     if (min_proc->lab6_priority == 0) {
-        min_proc->lab6_stride += BIG_STRIDE;
+        min_proc->lab6_stride = BIG_STRIDE;
     } else if (min_proc->lab6_priority > BIG_STRIDE) {
         min_proc->lab6_stride += 1;
     } else {
