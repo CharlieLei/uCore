@@ -146,7 +146,7 @@ stride_proc_tick(struct run_queue *rq, struct proc_struct *proc) {
      if (proc->time_slice > 0) {
          proc->time_slice --;
      }
-     if (proc->need_resched == 0) {
+     if (proc->time_slice == 0) {
          proc->need_resched = 1;
      }
 }
