@@ -57,6 +57,16 @@ idt_init(void) {
      /* LAB5 YOUR CODE */ 
      //you should update your lab1 code (just add ONE or TWO lines of code), let user app to use syscall to get the service of ucore
      //so you should setup the syscall interrupt gate in here
+    extern uintptr_t __vectors[];
+    int i;
+    for (i = 0; i < 256; ++i) {
+        SETGATE(idt[i], 0, KERNEL_CS, __vectors[i], DPL_KERNEL);
+    }
+    // 应用程序发出系统调用请求
+    SETGATE(idt[T_SYSCALL], 1, KERNEL_CS, __vectors[T_SYSCALL], DPL_USER);
+    // 从用户态转到内核态
+    SETGATE(idt[T_SWITCH_TOK], 1, KERNEL_CS, __vectors[T_SWITCH_TOK], DPL_USER);
+    lidt(&idt_pd);
 }
 
 static const char *
@@ -224,6 +234,11 @@ trap_dispatch(struct trapframe *tf) {
         /* you should upate you lab1 code (just add ONE or TWO lines of code):
          *    Every TICK_NUM cycle, you should set current process's current->need_resched = 1
          */
+        ++ticks;
+        if (ticks % TICK_NUM == 0) {
+            assert(current != NULL);
+            current->need_resched = 1;
+        }
         /* LAB6 YOUR CODE */
         /* IMPORTANT FUNCTIONS:
 	     * run_timer_list
