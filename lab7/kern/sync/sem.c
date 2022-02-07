@@ -43,6 +43,8 @@ static __noinline uint32_t __down(semaphore_t *sem, uint32_t wait_state) {
 
     schedule();
 
+    // 阻塞完毕，该进程被重新唤醒调度，说明现在可以使用该资源了。
+    // assert(sem->value == 0); // !IMPORTANT
     local_intr_save(intr_flag);
     wait_current_del(&(sem->wait_queue), wait);
     local_intr_restore(intr_flag);

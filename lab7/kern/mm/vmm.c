@@ -451,12 +451,22 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     *   mm->pgdir : the PDT of these vma
     *
     */
-#if 0
-    /*LAB3 EXERCISE 1: YOUR CODE*/
-    ptep = ???              //(1) try to find a pte, if pte's PT(Page Table) isn't existed, then create a PT.
+    //(1) try to find a pte, if pte's PT(Page Table) isn't existed, then create a PT.
+    ptep = get_pte(mm->pgdir, addr, 1);
+    // 查找页表失败
+    if (ptep == NULL) {
+        cprintf("get_pte in do_pgfault failed\n");
+        goto failed;
+    }
+    // 查找页表成功
     if (*ptep == 0) {
-                            //(2) if the phy addr isn't exist, then alloc a page & map the phy addr with logical addr
-
+        //(2) if the phy addr isn't exist, then alloc a page & map the phy addr with logical addr
+        struct Page *page = pgdir_alloc_page(mm->pgdir, addr, perm);
+        cprintf("page: 0x%08x\n", page);
+        if (page == NULL) {
+            cprintf("pgdir_alloc_page in do_pgfault failed\n");
+            goto failed;
+        }
     }
     else {
     /*LAB3 EXERCISE 2: YOUR CODE
@@ -481,10 +491,14 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
      */
         if(swap_init_ok) {
             struct Page *page=NULL;
-                                    //(1）According to the mm AND addr, try to load the content of right disk page
-                                    //    into the memory which page managed.
-                                    //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
-                                    //(3) make the page swappable.
+            //(1）According to the mm AND addr, try to load the content of right disk page
+            //    into the memory which page managed.
+            swap_in(mm, addr, &page);
+            //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
+            page_insert(mm->pgdir, page, addr, perm);
+            page->pra_vaddr = addr;
+            //(3) make the page swappable.
+            swap_map_swappable(mm, addr, page, 1);
                                     //(4) [NOTICE]: you myabe need to update your lab3's implementation for LAB5's normal execution.
         }
         else {
@@ -492,7 +506,6 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
             goto failed;
         }
    }
-#endif
    ret = 0;
 failed:
     return ret;
