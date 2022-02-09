@@ -747,14 +747,18 @@ load_icode(int fd, int argc, char **kargv) {
     uint32_t i, argv_size = 0;
     for (i = 0; i < argc; i++) {
         // 后一个+1是因为strnlen返回值不包含\0
-        argv_size += (strnlen(kargv[i], EXEC_MAX_ARG_LEN + 1) + 1);
+        argv_size += strnlen(kargv[i], EXEC_MAX_ARG_LEN + 1) + 1;
     }
-    uintptr_t stacktop = USTACKTOP - argv_size * sizeof(char) - sizeof(int);
-    char **uargv = (char **)(stacktop + sizeof(int));
+    // 存放字符串内容的内存
+    uintptr_t stacktop = USTACKTOP - (argv_size + 1) * sizeof(char);
+    // 存字符串指针的内存
+    char **uargv = (char **)(stacktop - argc * sizeof(char *));
     argv_size = 0;
     for (i = 0; i < argc; i++) {
-        strcpy(uargv[i], kargv[i]);
+        uargv[i] = strcpy((char *)(stacktop + argv_size), kargv[i]);
+        argv_size += strnlen(kargv[i], EXEC_MAX_ARG_LEN + 1) + 1;
     }
+    stacktop = (uintptr_t)uargv - sizeof(uintptr_t);
     *(int *)stacktop = argc;
 
     //(7) setup trapframe for user environment
