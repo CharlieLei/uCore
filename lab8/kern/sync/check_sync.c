@@ -119,29 +119,40 @@ void phi_test_condvar (i) {
 
 
 void phi_take_forks_condvar(int i) {
-     down(&(mtp->mutex));
+    // 只有一个进程在执行管程中的函数
+    down(&(mtp->mutex));
 //--------into routine in monitor--------------
-     // LAB7 EXERCISE1: YOUR CODE
-     // I am hungry
-     // try to get fork
+    // LAB7 EXERCISE1: YOUR CODE
+    // I am hungry
+    // try to get fork
+    state_condvar[i] = HUNGRY;
+    phi_test_condvar(i);
+    if (state_condvar[i] != EATING) {
+        cond_wait(&mtp->cv[i]);
+    }
 //--------leave routine in monitor--------------
-      if(mtp->next_count>0)
-         up(&(mtp->next));
-      else
-         up(&(mtp->mutex));
+    // 避免由于执行了cond_signal函数而睡眠的进程无法被唤醒
+    if(mtp->next_count>0)
+        up(&(mtp->next));
+    else
+        up(&(mtp->mutex));
 }
 
 void phi_put_forks_condvar(int i) {
-     down(&(mtp->mutex));
-
+    // 只有一个进程在执行管程中的函数
+    down(&(mtp->mutex));
 //--------into routine in monitor--------------
-     // LAB7 EXERCISE1: YOUR CODE
-     // I ate over
-     // test left and right neighbors
+    // LAB7 EXERCISE1: YOUR CODE
+    // I ate over
+    state_condvar[i] = THINKING;
+    // test left and right neighbors
+    phi_test_condvar(LEFT);
+    phi_test_condvar(RIGHT);
 //--------leave routine in monitor--------------
-     if(mtp->next_count>0)
+    // 避免由于执行了cond_signal函数而睡眠的进程无法被唤醒
+    if(mtp->next_count>0)
         up(&(mtp->next));
-     else
+    else
         up(&(mtp->mutex));
 }
 

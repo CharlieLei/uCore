@@ -72,10 +72,18 @@ typedef struct condvar{
     monitor_t * owner;      // the owner(monitor) of this condvar
 } condvar_t;
 
+/*
+ * **阻塞式条件变量**
+ * 设每个管程对象有两个线程队列
+ *  - mutex用于保护管程
+ *  - next记录执行cond_signal函数且睡着了的进程，管理等待进入管程的进程
+ * 设对于每个条件变量c, 有一个线程队列
+ *  - c.q, 所有等待c的线程的队列
+ */
 typedef struct monitor{
     semaphore_t mutex;      // the mutex lock for going into the routines in monitor, should be initialized to 1
     semaphore_t next;       // the next semaphore is used to down the signaling proc itself, and the other OR wakeuped waiting proc should wake up the sleeped signaling proc.
-    int next_count;         // the number of of sleeped signaling proc
+    int next_count;         // the number of sleeped signaling proc
     condvar_t *cv;          // the condvars in monitor
 } monitor_t;
 
